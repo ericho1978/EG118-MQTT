@@ -7,12 +7,13 @@
 #define PCMODBUSTOOLDEMO_ENABLE
 //#define TH485_PE_DEMO_ENABLE
 //#define AWS_CLOUD_ENABLE
-#define HUAWEI_CLOUD_ENABLE
+//#define HUAWEI_CLOUD_ENABLE
 #define USRIO_DEMO_ENABLE
 //#define LOG_ENABLE
-#define HUAWEI_CLOUD_IOT_WITH_NO_TLS
+//#define HUAWEI_CLOUD_IOT_WITH_NO_TLS
 #define ETH_CLOCK_MODE ETH_CLOCK_GPIO0_IN  // 或根据硬件选择其他模式
 #define WIFI_DTU_ENABLE
+#define MQTT_DTU_ENABLE
 // ===== 系统参数宏定义 =====
 #define WIFI_SSIDstring_length_MAX 32
 #define WIFI_PASSWARD_LENGTH_MAX 64
