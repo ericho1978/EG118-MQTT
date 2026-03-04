@@ -693,7 +693,7 @@ void savemqttserverinfo_toeeprom(char* ptr_mqttserverstring,char* ptr_mqtt_users
 
     system_parameter_eg118_main_moudle.parameter_refreshEEPROMRAM();
     system_parameter_eg118_main_moudle.set_mqtt_server_user_length(mqttserver_user_length);
-    system_parameter_eg118_main_moudle.set_mqtt_user_string(ptr_mqtt_userstring, mqttserver_user_length);
+    system_parameter_eg118_main_moudle.set_mqttserver_user_string(ptr_mqtt_userstring, mqttserver_user_length);
 
     system_parameter_eg118_main_moudle.parameter_refreshEEPROMRAM();
     system_parameter_eg118_main_moudle.set_mqtt_server_pass_length(mqttserver_password_length);
@@ -2722,6 +2722,17 @@ void setup(void)
   OneButton_buttonreload.attachClick(OneButton_buttonreloadClick);
   OneButton_buttonreload.attachLongPressStop(OneButton_buttonreloadlongpressup);
 //OneButton_buttonreload.attachPressStart(OneButton_buttonreloadpressstart);
+    //OneButton_buttonreload.attachPressStart
+    (OneButton_buttonreloadpressstart);
+    // 强制设置为MQTT_DTU模式
+
+    eg118_device_mode = DEVICE_MODE_MQTT_DTU_ONLY;
+
+    system_parameter_eg118_main_moudle.parameter_refreshEEPROMRAM();
+
+    //system_parameter_eg118_main_moudle.setdeviceMode(DEVICE_MODE_MQTT_DTU_ONLY);
+
+    Serial.println("[setup] Device mode set to MQTT_DTU_ONLY");
 #if 1
   //Serial.println("[setup]========================LINE 2913 ->xTaskCreate xTask_watchdog prio  2");
   xTaskCreate(
