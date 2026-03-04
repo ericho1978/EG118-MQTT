@@ -685,16 +685,15 @@ void savemqttserverinfo_toeeprom(char* ptr_mqttserverstring,char* ptr_mqtt_users
   {
       mqttserver_password_length=MQTTSERVER_PASSWORD_string_length_MAX;
   }
-  //设定用户设置mqtt接入的信息不回为空，如果空的应该不对不写入；
-  if ( (mqttserver_ip_length) &&(mqttserver_user_length)&&(mqttserver_password_length) )
-  {
+  // 只要求服务器地址不为空，用户名和密码可以为空；
+  if (mqttserver_ip_length) {
     system_parameter_eg118_main_moudle.parameter_refreshEEPROMRAM();
     system_parameter_eg118_main_moudle.set_mqtt_server_ip_length(mqttserver_ip_length);
     system_parameter_eg118_main_moudle.set_mqttserver_ip_string(ptr_mqttserverstring, mqttserver_ip_length);
 
     system_parameter_eg118_main_moudle.parameter_refreshEEPROMRAM();
     system_parameter_eg118_main_moudle.set_mqtt_server_user_length(mqttserver_user_length);
-    system_parameter_eg118_main_moudle.set_mqttserver_user_string(ptr_mqtt_userstring, mqttserver_user_length);
+    system_parameter_eg118_main_moudle.set_mqtt_user_string(ptr_mqtt_userstring, mqttserver_user_length);
 
     system_parameter_eg118_main_moudle.parameter_refreshEEPROMRAM();
     system_parameter_eg118_main_moudle.set_mqtt_server_pass_length(mqttserver_password_length);
@@ -753,15 +752,29 @@ void callbackset_3_3_1_tcpserversettingweb(void)
     </body>\
     </html>");
   });
-  AsyncWeb_server_instance.on("/process", HTTP_GET, [](AsyncWebServerRequest *request) {
-    if (request->hasParam("tcpserver_ip")) {
-      String tcpserver_ipmessage;
-
-      tcpserver_ipmessage = request->getParam("tcpserver_ip")->value();
-      tcpserver_ipmessage.toCharArray(text_tcpserverip_stringbuf, 50, 0);
-     savetcpserverinfo_toeeprom(text_tcpserverip_stringbuf,text_tcpserverport_stringbuf);
-    }
-  });
+AsyncWeb_server_instance.on("/process", HTTP_GET, [](AsyncWebServerRequest *request) {
+  // 先获取所有参数
+  if (request->hasParam("mqttserver_ip")) {
+    String mqttserverip_message = request->getParam("mqttserver_ip")->value();
+    mqttserverip_message.toCharArray(text_mqttserverip_stringbuf, 50, 0);
+  }
+  
+  if (request->hasParam("mqttserver_user")) {
+    String mqttserver_usermessage = request->getParam("mqttserver_user")->value();
+    mqttserver_usermessage.toCharArray(text_mqttserveruser_stringbuf, MQTTSERVER_USER_length_MAX, 0);
+  }
+  
+  if (request->hasParam("mqttserver_pass")) {
+    String mqttserver_passmessage = request->getParam("mqttserver_pass")->value();
+    mqttserver_passmessage.toCharArray(text_mqttserverpass_stringbuf, MQTTSERVER_PASS_length_MAX, 0);
+  }
+  
+  // 只调用一次保存函数
+  savemqttserverinfo_toeeprom(text_mqttserverip_stringbuf, text_mqttserveruser_stringbuf, text_mqttserverpass_stringbuf);
+  
+  // 返回成功响应
+  request->send(200, "text/html", "MQTT configuration saved successfully");
+});
 
 }  //callbackset_4_tcpserversettingweb
 
