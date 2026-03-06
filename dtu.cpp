@@ -281,6 +281,10 @@ void xTask_tcpDTUfunc_nocrash(void *xTask2)
 
 }  //end  xTask_tcpDTUfunc_nocrash
 
+// 函数声明
+static void publish_full_io_status(void);
+static void publish_home_assistant_discovery(void);
+
 void m100_mqtt_reconnect(void) 
 {
   boolean ret_connect_status = 0;
@@ -311,6 +315,12 @@ void m100_mqtt_reconnect(void)
       m100mqttclient.subscribe(do1_topic);
       m100mqttclient.subscribe(do2_topic);
       Serial.printf("[MQTT] 订阅主题: %s, %s\n", do1_topic, do2_topic);
+      
+      // 发布Home Assistant自动发现配置
+      publish_home_assistant_discovery();
+      
+      // 发布初始状态
+      publish_full_io_status();
     }
   }
   //Serial.printf("LINE 2331  MQTT connection...ok ok ok!!!!");
@@ -350,6 +360,62 @@ static void publish_full_io_status(void) {
     m100mqttclient.publish(di_topic, di_value);
     m100mqttclient.publish(do1_topic, do1_status ? "ON" : "OFF");
     m100mqttclient.publish(do2_topic, do2_status ? "ON" : "OFF");
+    
+    Serial.printf("[MQTT] 发布AI状态: %s = %s\n", ai_topic, ai_value);
+    Serial.printf("[MQTT] 发布DI1状态: %s = %s\n", di_topic, di_value);
+    Serial.printf("[MQTT] 发布DO1状态: %s = %s\n", do1_topic, do1_status ? "ON" : "OFF");
+    Serial.printf("[MQTT] 发布DO2状态: %s = %s\n", do2_topic, do2_status ? "ON" : "OFF");
+  }
+}
+
+// 发布Home Assistant自动发现配置
+static void publish_home_assistant_discovery(void) {
+  if (m100mqttclient.connected()) {
+    Serial.println("[MQTT] 发布Home Assistant自动发现配置");
+    
+    // DO1配置
+    char do1_config_topic[80];
+    snprintf(do1_config_topic, 80, "homeassistant/switch/%s_do1/config", device_id);
+    char do1_config[400];
+    snprintf(do1_config, 400, 
+      "{\"name\": \"%s DO1\", \"unique_id\": \"%s_do1\", \"command_topic\": \"homeassistant/switch/%s_do1/set\", \"state_topic\": \"homeassistant/switch/%s_do1/state\", \"payload_on\": \"ON\", \"payload_off\": \"OFF\", \"device\": {\"identifiers\": [\"%s\"], \"name\": \"%s\", \"manufacturer\": \"PUSR\", \"model\": \"EG118\"}}" ,
+      device_id, device_id, device_id, device_id, device_id, device_id);
+    m100mqttclient.publish(do1_config_topic, do1_config, true);
+    Serial.printf("[MQTT] 发布DO1配置: %s\n", do1_config_topic);
+    Serial.printf("[MQTT] DO1配置内容: %s\n", do1_config);
+    
+    // DO2配置
+    char do2_config_topic[80];
+    snprintf(do2_config_topic, 80, "homeassistant/switch/%s_do2/config", device_id);
+    char do2_config[400];
+    snprintf(do2_config, 400, 
+      "{\"name\": \"%s DO2\", \"unique_id\": \"%s_do2\", \"command_topic\": \"homeassistant/switch/%s_do2/set\", \"state_topic\": \"homeassistant/switch/%s_do2/state\", \"payload_on\": \"ON\", \"payload_off\": \"OFF\", \"device\": {\"identifiers\": [\"%s\"], \"name\": \"%s\", \"manufacturer\": \"PUSR\", \"model\": \"EG118\"}}" ,
+      device_id, device_id, device_id, device_id, device_id, device_id);
+    m100mqttclient.publish(do2_config_topic, do2_config, true);
+    Serial.printf("[MQTT] 发布DO2配置: %s\n", do2_config_topic);
+    Serial.printf("[MQTT] DO2配置内容: %s\n", do2_config);
+    
+    // DI1配置
+    char di1_config_topic[80];
+    snprintf(di1_config_topic, 80, "homeassistant/binary_sensor/%s_di1/config", device_id);
+    char di1_config[400];
+    snprintf(di1_config, 400, 
+      "{\"name\": \"%s DI1\", \"unique_id\": \"%s_di1\", \"state_topic\": \"homeassistant/binary_sensor/%s_di1/state\", \"payload_on\": \"1\", \"payload_off\": \"0\", \"device_class\": \"motion\", \"device\": {\"identifiers\": [\"%s\"], \"name\": \"%s\", \"manufacturer\": \"PUSR\", \"model\": \"EG118\"}}" ,
+      device_id, device_id, device_id, device_id, device_id);
+    m100mqttclient.publish(di1_config_topic, di1_config, true);
+    Serial.printf("[MQTT] 发布DI1配置: %s\n", di1_config_topic);
+    Serial.printf("[MQTT] DI1配置内容: %s\n", di1_config);
+    
+    // AI配置
+    char ai_config_topic[80];
+    snprintf(ai_config_topic, 80, "homeassistant/sensor/%s_ai/config", device_id);
+    char ai_config[400];
+    snprintf(ai_config, 400, 
+      "{\"name\": \"%s AI电流\", \"unique_id\": \"%s_ai\", \"state_topic\": \"homeassistant/sensor/%s_ai/state\", \"unit_of_measurement\": \"mA\", \"device_class\": \"current\", \"device\": {\"identifiers\": [\"%s\"], \"name\": \"%s\", \"manufacturer\": \"PUSR\", \"model\": \"EG118\"}}" ,
+      device_id, device_id, device_id, device_id, device_id);
+    m100mqttclient.publish(ai_config_topic, ai_config, true);
+    Serial.printf("[MQTT] 发布AI配置: %s\n", ai_config_topic);
+    Serial.printf("[MQTT] AI配置内容: %s\n", ai_config);
   }
 }
 
@@ -361,6 +427,10 @@ void mqttreveivedtudata_callback(char *topic, byte *payload, unsigned int length
   } else {
     strncpy(mqtt_sub_scribebuf, (char *)payload, 100);
   }
+  
+  // 调试信息
+  Serial.printf("[MQTT] 收到主题: %s\n", topic);
+  Serial.printf("[MQTT] 收到消息: %s\n", mqtt_sub_scribebuf);
 
   // Home Assistant控制主题
   char do1_topic[50];
@@ -371,48 +441,56 @@ void mqttreveivedtudata_callback(char *topic, byte *payload, unsigned int length
   snprintf(do2_topic, 50, "homeassistant/switch/%s_do2/set", device_id);
   snprintf(do1_state_topic, 50, "homeassistant/switch/%s_do1/state", device_id);
   snprintf(do2_state_topic, 50, "homeassistant/switch/%s_do2/state", device_id);
+  
+  // 调试信息
+  Serial.printf("[MQTT] 期望DO1主题: %s\n", do1_topic);
+  Serial.printf("[MQTT] 期望DO2主题: %s\n", do2_topic);
 
+  // 处理Home Assistant命令
   if (strcmp(topic, do1_topic) == 0) {
+    Serial.println("[MQTT] 匹配DO1主题");
     if (strstr(mqtt_sub_scribebuf, "ON")) {
       eg118_drvout.M100DOU1_ON();
-      Serial.println("[MQTT] HA: DO1:ON");
+      Serial.println("[MQTT] 执行DO1:ON");
       m100mqttclient.publish(do1_state_topic, "ON");
     } else if (strstr(mqtt_sub_scribebuf, "OFF")) {
       eg118_drvout.M100DOU1_OFF();
-      Serial.println("[MQTT] HA: DO1:OFF");
+      Serial.println("[MQTT] 执行DO1:OFF");
       m100mqttclient.publish(do1_state_topic, "OFF");
     }
   } else if (strcmp(topic, do2_topic) == 0) {
+    Serial.println("[MQTT] 匹配DO2主题");
     if (strstr(mqtt_sub_scribebuf, "ON")) {
       eg118_drvout.M100DOU2_ON();
-      Serial.println("[MQTT] HA: DO2:ON");
+      Serial.println("[MQTT] 执行DO2:ON");
       m100mqttclient.publish(do2_state_topic, "ON");
     } else if (strstr(mqtt_sub_scribebuf, "OFF")) {
       eg118_drvout.M100DOU2_OFF();
-      Serial.println("[MQTT] HA: DO2:OFF");
+      Serial.println("[MQTT] 执行DO2:OFF");
       m100mqttclient.publish(do2_state_topic, "OFF");
     }
   } else if (strstr(mqtt_sub_scribebuf, "DO1:ON")) {
     eg118_drvout.M100DOU1_ON();
-    Serial.println("[MQTT] DO1:ON");
+    Serial.println("[MQTT] 执行DO1:ON (传统格式)");
     publish_full_io_status();
   } else if (strstr(mqtt_sub_scribebuf, "DO1:OFF")) {
     eg118_drvout.M100DOU1_OFF();
-    Serial.println("[MQTT] DO1:OFF");
+    Serial.println("[MQTT] 执行DO1:OFF (传统格式)");
     publish_full_io_status();
   } else if (strstr(mqtt_sub_scribebuf, "DO2:ON")) {
     eg118_drvout.M100DOU2_ON();
-    Serial.println("[MQTT] DO2:ON");
+    Serial.println("[MQTT] 执行DO2:ON (传统格式)");
     publish_full_io_status();
   } else if (strstr(mqtt_sub_scribebuf, "DO2:OFF")) {
     eg118_drvout.M100DOU2_OFF();
-    Serial.println("[MQTT] DO2:OFF");
+    Serial.println("[MQTT] 执行DO2:OFF (传统格式)");
     publish_full_io_status();
   } else if (strstr(mqtt_sub_scribebuf, "GET:IO")) {
     publish_full_io_status();
-    Serial.println("[MQTT] GET:IO response sent");
+    Serial.println("[MQTT] 执行GET:IO");
   } else {
     senddatators485(mqtt_sub_scribebuf, length);
+    Serial.println("[MQTT] 发送到RS485");
   }
 }
 
@@ -433,15 +511,31 @@ void xTask_mqttDTUfunc(void *xTask2)
 
   // 初始化设备ID（网线优先，没有就用WiFi）
   IPAddress ip;
-  if (ETH.localIP()) {
-    ip = ETH.localIP();
-    Serial.printf("[MQTT] 以太网IP: %s\n", ip.toString().c_str());
-  } else {
-    ip = WiFi.localIP();
-    Serial.printf("[MQTT] WiFi IP: %s\n", ip.toString().c_str());
+  int retry = 0;
+  while (retry < 10) {
+    if (ETH.localIP()) {
+      ip = ETH.localIP();
+      Serial.printf("[MQTT] 以太网IP: %s\n", ip.toString().c_str());
+      break;
+    } else if (WiFi.localIP()) {
+      ip = WiFi.localIP();
+      Serial.printf("[MQTT] WiFi IP: %s\n", ip.toString().c_str());
+      break;
+    } else {
+      Serial.println("[MQTT] 等待网络连接...");
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      retry++;
+    }
   }
-  snprintf(device_id, 20, "eg118-%d", ip[3]);
-  Serial.printf("[MQTT] 设备ID: %s\n", device_id);
+  
+  if (ip[0] == 0 && ip[1] == 0 && ip[2] == 0 && ip[3] == 0) {
+    // 如果还是没有IP，使用默认值
+    strcpy(device_id, "eg118-0");
+    Serial.println("[MQTT] 无法获取IP，使用默认设备ID: eg118-0");
+  } else {
+    snprintf(device_id, 20, "eg118-%d", ip[3]);
+    Serial.printf("[MQTT] 设备ID: %s\n", device_id);
+  }
 
   mqttSERVERIPstring_length = system_parameter_eg118_dtu_moudle.get_mqtt_server_ip_length();
 
