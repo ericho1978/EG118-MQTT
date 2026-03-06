@@ -21,6 +21,7 @@ system_parameter eg118_system_parameter_dtu_module;
 
 #include <RS485.h>
 #include <WiFi.h>
+#include <ETH.h>
 #include <esp_wifi.h>
 
 
@@ -50,6 +51,7 @@ extern char text_mqttserverpass_stringbuf[MQTTSERVER_PASS_length_MAX];
 
 WiFiClient m100espClient;
 PubSubClient m100mqttclient(m100espClient);
+char device_id[20];
 bool gv_istcpserverconnected = 0;                               //tcp服务器是否连接上的标识
 bool gv_ismqttserverconnected = 0;                              //mqtt服务器是否连接上的标识
 static unsigned char atmodule_connect_mode = 0;
@@ -301,12 +303,55 @@ void m100_mqtt_reconnect(void)
     //连接成功后才能订阅主题；
     if (m100mqttclient.connected()) {
       m100mqttclient.subscribe("mqtt_to_rs485");
+      // Home Assistant控制主题
+      char do1_topic[50];
+      char do2_topic[50];
+      snprintf(do1_topic, 50, "homeassistant/switch/%s_do1/set", device_id);
+      snprintf(do2_topic, 50, "homeassistant/switch/%s_do2/set", device_id);
+      m100mqttclient.subscribe(do1_topic);
+      m100mqttclient.subscribe(do2_topic);
+      Serial.printf("[MQTT] 订阅主题: %s, %s\n", do1_topic, do2_topic);
     }
   }
   //Serial.printf("LINE 2331  MQTT connection...ok ok ok!!!!");
   gv_ismqttserverconnected = 1;
 }  //m100_mqtt_reconnect
 
+static void publish_full_io_status(void) {
+  if (m100mqttclient.connected()) {
+    int adc_value = eg118_adc.get_average_adcvalue();
+    float current = eg118_adc.get_ADCchangetocurrent(adc_value);
+    
+    unsigned char do_status = system_parameter_eg118_dtu_moudle.get_74HC595CHIP_VALUE();
+    int do1_status = (do_status & (1 << 2)) ? 1 : 0;
+    int do2_status = (do_status & (1 << 3)) ? 1 : 0;
+    
+    pinMode(39, INPUT);
+    int di1_status = digitalRead(39);
+    
+    // 传统主题
+    char io_status[200];
+    snprintf(io_status, 200, "AI:%.2fmA,DI:%d,DO1:%d,DO2:%d", current, di1_status, do1_status, do2_status);
+    m100mqttclient.publish("eg118_io_status", io_status);
+    Serial.printf("[MQTT] IO状态: %s\n", io_status);
+    
+    // Home Assistant主题
+    char ai_topic[50], di_topic[50], do1_topic[50], do2_topic[50];
+    char ai_value[20], di_value[2];
+    snprintf(ai_topic, 50, "homeassistant/sensor/%s_ai/state", device_id);
+    snprintf(di_topic, 50, "homeassistant/binary_sensor/%s_di1/state", device_id);
+    snprintf(do1_topic, 50, "homeassistant/switch/%s_do1/state", device_id);
+    snprintf(do2_topic, 50, "homeassistant/switch/%s_do2/state", device_id);
+    
+    snprintf(ai_value, 20, "%.2f", current);
+    snprintf(di_value, 2, "%d", di1_status);
+    
+    m100mqttclient.publish(ai_topic, ai_value);
+    m100mqttclient.publish(di_topic, di_value);
+    m100mqttclient.publish(do1_topic, do1_status ? "ON" : "OFF");
+    m100mqttclient.publish(do2_topic, do2_status ? "ON" : "OFF");
+  }
+}
 
 void mqttreveivedtudata_callback(char *topic, byte *payload, unsigned int length) 
 {
@@ -316,34 +361,61 @@ void mqttreveivedtudata_callback(char *topic, byte *payload, unsigned int length
   } else {
     strncpy(mqtt_sub_scribebuf, (char *)payload, 100);
   }
- //senddatators485(mqtt_sub_scribebuf, length);
 
-  // DO控制命令处理
-  if (strstr(mqtt_sub_scribebuf, "DO1:ON")) {
+  // Home Assistant控制主题
+  char do1_topic[50];
+  char do2_topic[50];
+  char do1_state_topic[50];
+  char do2_state_topic[50];
+  snprintf(do1_topic, 50, "homeassistant/switch/%s_do1/set", device_id);
+  snprintf(do2_topic, 50, "homeassistant/switch/%s_do2/set", device_id);
+  snprintf(do1_state_topic, 50, "homeassistant/switch/%s_do1/state", device_id);
+  snprintf(do2_state_topic, 50, "homeassistant/switch/%s_do2/state", device_id);
+
+  if (strcmp(topic, do1_topic) == 0) {
+    if (strstr(mqtt_sub_scribebuf, "ON")) {
+      eg118_drvout.M100DOU1_ON();
+      Serial.println("[MQTT] HA: DO1:ON");
+      m100mqttclient.publish(do1_state_topic, "ON");
+    } else if (strstr(mqtt_sub_scribebuf, "OFF")) {
+      eg118_drvout.M100DOU1_OFF();
+      Serial.println("[MQTT] HA: DO1:OFF");
+      m100mqttclient.publish(do1_state_topic, "OFF");
+    }
+  } else if (strcmp(topic, do2_topic) == 0) {
+    if (strstr(mqtt_sub_scribebuf, "ON")) {
+      eg118_drvout.M100DOU2_ON();
+      Serial.println("[MQTT] HA: DO2:ON");
+      m100mqttclient.publish(do2_state_topic, "ON");
+    } else if (strstr(mqtt_sub_scribebuf, "OFF")) {
+      eg118_drvout.M100DOU2_OFF();
+      Serial.println("[MQTT] HA: DO2:OFF");
+      m100mqttclient.publish(do2_state_topic, "OFF");
+    }
+  } else if (strstr(mqtt_sub_scribebuf, "DO1:ON")) {
     eg118_drvout.M100DOU1_ON();
     Serial.println("[MQTT] DO1:ON");
+    publish_full_io_status();
   } else if (strstr(mqtt_sub_scribebuf, "DO1:OFF")) {
     eg118_drvout.M100DOU1_OFF();
     Serial.println("[MQTT] DO1:OFF");
+    publish_full_io_status();
   } else if (strstr(mqtt_sub_scribebuf, "DO2:ON")) {
     eg118_drvout.M100DOU2_ON();
     Serial.println("[MQTT] DO2:ON");
+    publish_full_io_status();
   } else if (strstr(mqtt_sub_scribebuf, "DO2:OFF")) {
     eg118_drvout.M100DOU2_OFF();
     Serial.println("[MQTT] DO2:OFF");
+    publish_full_io_status();
   } else if (strstr(mqtt_sub_scribebuf, "GET:IO")) {
-    // 获取IO状态命令
-    int adc_value = eg118_adc.get_average_adcvalue();
-    float current = eg118_adc.get_ADCchangetocurrent(adc_value);
-    char io_status[100];
-    snprintf(io_status, 100, "AI:%.2fmA", current);
-    m100mqttclient.publish("eg118_io_status", io_status);
+    publish_full_io_status();
     Serial.println("[MQTT] GET:IO response sent");
   } else {
-    // 其他数据发送到RS485
     senddatators485(mqtt_sub_scribebuf, length);
   }
 }
+
 void xTask_mqttDTUfunc(void *xTask2) 
 {
   //int ethernet_status = 0;
@@ -358,6 +430,18 @@ void xTask_mqttDTUfunc(void *xTask2)
   memset(text_mqttserverpass_stringbuf, 0, MQTTSERVER_PASS_length_MAX);
   //refreshEEPROMRAM();
   system_parameter_eg118_dtu_moudle.parameter_refreshEEPROMRAM();
+
+  // 初始化设备ID（网线优先，没有就用WiFi）
+  IPAddress ip;
+  if (ETH.localIP()) {
+    ip = ETH.localIP();
+    Serial.printf("[MQTT] 以太网IP: %s\n", ip.toString().c_str());
+  } else {
+    ip = WiFi.localIP();
+    Serial.printf("[MQTT] WiFi IP: %s\n", ip.toString().c_str());
+  }
+  snprintf(device_id, 20, "eg118-%d", ip[3]);
+  Serial.printf("[MQTT] 设备ID: %s\n", device_id);
 
   mqttSERVERIPstring_length = system_parameter_eg118_dtu_moudle.get_mqtt_server_ip_length();
 
@@ -405,18 +489,47 @@ void xTask_mqttDTUfunc(void *xTask2)
   creat_packet_ready_timer();  
   // IO状态上报定时器
   static unsigned long last_io_report = 0;
-  
+  // DI状态变化检测
+  static int last_di1_status = -1;  
   while (1) {
     m100mqttclient.loop();
+
+    // DI状态实时检测（变化即上报）
+    pinMode(39, INPUT);
+    int current_di1_status = digitalRead(39);
+    if (last_di1_status != current_di1_status) {
+      last_di1_status = current_di1_status;
+      Serial.printf("[MQTT] DI1变化: %d\n", current_di1_status);
+      // DI变化时立即上报完整状态
+      unsigned char do_status = system_parameter_eg118_dtu_moudle.get_74HC595CHIP_VALUE();
+      int do1_status = (do_status & (1 << 2)) ? 1 : 0;
+      int do2_status = (do_status & (1 << 3)) ? 1 : 0;
+      int adc_value = eg118_adc.get_average_adcvalue();
+      float current = eg118_adc.get_ADCchangetocurrent(adc_value);
+      char io_status[200];
+      snprintf(io_status, 200, "AI:%.2fmA,DI:%d,DO1:%d,DO2:%d", current, current_di1_status, do1_status, do2_status);
+      m100mqttclient.publish("eg118_io_status", io_status);
+    }
 
     // 定时上报IO状态（每5秒）
     if (millis() - last_io_report > 5000) {
       last_io_report = millis();
       if (m100mqttclient.connected()) {
+        // 获取AI值
         int adc_value = eg118_adc.get_average_adcvalue();
         float current = eg118_adc.get_ADCchangetocurrent(adc_value);
-        char io_status[100];
-        snprintf(io_status, 100, "AI:%.2fmA", current);
+        
+        // 获取DO状态
+        unsigned char do_status = system_parameter_eg118_dtu_moudle.get_74HC595CHIP_VALUE();
+        int do1_status = (do_status & (1 << 2)) ? 1 : 0;
+        int do2_status = (do_status & (1 << 3)) ? 1 : 0;
+        
+        // 获取DI状态
+        int di1_status = digitalRead(39);
+        
+        // 发布完整状态
+        char io_status[200];
+        snprintf(io_status, 200, "AI:%.2fmA,DI:%d,DO1:%d,DO2:%d", current, di1_status, do1_status, do2_status);
         m100mqttclient.publish("eg118_io_status", io_status);
       }
     }
