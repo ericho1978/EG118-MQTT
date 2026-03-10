@@ -2642,7 +2642,8 @@ void setup(void)
   Serial.begin(9600);
   
   Serial1.begin(115200, SERIAL_8N1, RX1PIN, TX1PIN);
-  RS485.begin(115200);
+  Serial2.begin(9600, SERIAL_8N1, GPIO_NUM_34, GPIO_NUM_13); // Slot1 RS485 (9600波特率)
+  RS485.begin(9600); // 初始化RS485 (9600波特率)
   //if (!ModbusRTUClient.begin(115200)) 
 
   reload_dog();

@@ -389,15 +389,20 @@ void xTask_mqttDTUfunc(void *xTask2)
 
   delay(1000);
 
-
+  Serial.println("[MQTT] Step 1: Setting server...");
   m100mqttclient.setServer(text_mqttserverip_stringbuf, 1883);
-
+  Serial.println("[MQTT] Step 2: Setting callback...");
   m100mqttclient.setCallback(mqttreveivedtudata_callback);
+  Serial.println("[MQTT] Step 3: Calling loop...");
   m100mqttclient.loop();
+  Serial.println("[MQTT] Step 4: Checking connection...");
   if (!m100mqttclient.connected()) {
+    Serial.println("[MQTT] Step 5: Not connected, attempting reconnect...");
     m100_mqtt_reconnect();
+    Serial.println("[MQTT] Step 6: Calling loop after reconnect...");
     m100mqttclient.loop();
   }
+  Serial.println("[MQTT] Step 7: Connection check completed!");
 
   //char debugbuf[20];
   //int length = 0;
@@ -513,7 +518,7 @@ void tcpdtu_task_start(void)
     xTaskCreate(
       xTask_pactet_rs485datafunc,   /* Task function. */
       "xTask_pactet_rs485datafunc", /* String with name of task. */
-      4096,                         /* Stack size in bytes. */
+      8192,                         /* Stack size in bytes - increased from 4096 to 8192 */
       NULL,                         /* Parameter passed as input of the task */
       3,                            /* Priority of the task.(configMAX_PRIORITIES - 1 being the highest, and 0 being the lowest.) */
       NULL);
@@ -526,7 +531,7 @@ void mqttdtu_task_start(void)
     xTaskCreate(
       xTask_mqttDTUfunc,   /* Task function. */
       "xTask_mqttDTUfunc", /* String with name of task. */
-      4096,                /* Stack size in bytes. */
+      16384,               /* Stack size in bytes - increased from 8192 to 16384 */
       NULL,                /* Parameter passed as input of the task */
       5,                   /* Priority of the task.(configMAX_PRIORITIES - 1 being the highest, and 0 being the lowest.) */
       NULL);
@@ -535,7 +540,7 @@ void mqttdtu_task_start(void)
     xTaskCreate(
       xTask_pactet_rs485datafunc,   /* Task function. */
       "xTask_pactet_rs485datafunc", /* String with name of task. */
-      4096,                         /* Stack size in bytes. */
+      8192,                         /* Stack size in bytes - increased from 4096 to 8192 */
       NULL,                         /* Parameter passed as input of the task */
       3,                            /* Priority of the task.(configMAX_PRIORITIES - 1 being the highest, and 0 being the lowest.) */
       NULL);
